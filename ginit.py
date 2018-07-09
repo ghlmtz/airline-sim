@@ -11,10 +11,12 @@ mapy = 512
 seed = 4
 sea_level = 0.6
 DEBUG = 0
+EXPERIMENT = 0
 
 setup_time = timeit.default_timer()
 
 tiles = [[None] * mapx for _ in range(mapy)]
+town_grid = [[None] * mapx for _ in range(mapy)]
 lands = []
 towns = []
 countries = []

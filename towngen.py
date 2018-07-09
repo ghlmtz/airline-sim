@@ -1,19 +1,12 @@
 import json
 import random
 from multiprocessing import Pool
+from gfx import Town
 
 from util import *
 from enums import *
 from fileio import *
 import ginit as g
-
-class Town:
-	def __init__(self,lat,lon):
-		self.lat, self.lon = (lat,lon)
-		self.X, self.Y = inv_lat_long((lat,lon))
-		self.X = wrap(self.X, g.mapx)
-		self.country = -1
-		self.selected = 0
 
 def dist_calc(N,town,other_town):
 	dist = town_dist(town,other_town)
@@ -37,6 +30,7 @@ def loadTowns():
 			g.countries[T.country].append(T)
 			g.lands[T.land].towns.append((T.X,T.Y))
 			g.towns.append(T)
+			g.town_grid[T.X][T.Y] = T
 		if g.DEBUG:
 			print("Towns: %d" %len(g.towns))
 	else:
@@ -199,6 +193,8 @@ def loadTowns():
 			town.population = int(pop)
 			popsum += int(pop)
 
+			# Take this opportunity to populate town_grid as well
+			g.town_grid[x][y] = town
 
 		for N,country in enumerate(g.countries):
 			capital = None

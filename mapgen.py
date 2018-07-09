@@ -21,6 +21,7 @@ class TileGroup:
 class Tile:
 	def __init__(self):
 		self.floodFilled = False
+		self.country = None
 
 	def updateBitmask(self):
 		self.count = 0

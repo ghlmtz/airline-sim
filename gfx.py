@@ -154,75 +154,66 @@ class Plane(pygame.sprite.Sprite):
 		self.baseImage = pygame.image.load('tiles/plane.png').convert_alpha()
 		self.image = self.baseImage
 		self.rect = self.baseImage.get_rect()
-		self.speed = 0.2 * 20	# In miles/frame, I guess
+		self.speed = 0.2	# In miles/frame, I guess
 		self.dist = 0
-		self.initGroup()
 		self.lat = lat
 		self.lon = lon
+		self.flighttime = 0
 		self.dlat = dlat
 		self.dlon = dlon
-		x = round((self.lon/(360)+0.5)*g.mapx*32)
-		y = round(32*(-g.mapx*math.log(tan(self.lat)+1/cos(self.lat))/6+g.mapy/2))
-		self.display(1,x,y)
-
-	def update(self,maplat,maplon):
-		if lat_lon_dist(maplat,maplon,self.lat,self.lon) < 1000:
-			x = round((self.lon/(360)+0.5)*g.mapx*32)
-			y = round(32*(-g.mapx*math.log(tan(self.lat)+1/cos(self.lat))/6+g.mapy/2))
-
-			x0 = (x - disp_x*32)
-			if x0 < -5000:
-				x0 += 16384
-			elif x0 > 5000:
-				x0 -= 16384
-			y0 = y - disp_y*32
-
-			# Test blit
-			a = disp_x + (x0//32)
-			b = disp_y + (y0//32)
-			a = wrap(a,g.mapx)
-			i = (x0//32)
-			j = (y0//32)
-
-			redraw_tile9(a,b,(x0//32),(y0//32))
-
-			self.display(1,x,y)
-		else:
-			self.display(0,None,None)
-
-	def display(self,onscreen,x,y):
 		bearing = self.course()
+		self.azimuth = math.asin(sin(bearing)*cos(self.lat))
+		self.sigma01 = math.atan2(tan(self.lat),cos(bearing)) 
+		self.lon0 = self.lon - math.degrees(math.atan2(math.sin(self.azimuth)*math.sin(self.sigma01),math.cos(self.sigma01)))
 
-		if onscreen:
-			tmp = pygame.display.get_surface()
-			x0 = (x - disp_x*32)
-			if x0 < -5000:
-				x0 += 16384
-			elif x0 > 5000:
-				x0 -= 16384
-			y0 = y - disp_y*32
+	def update_coords(self):
+		self.x0 = round((self.lon/(360)+0.5)*g.mapx*32) - disp_x * 32
+		self.y0 = round(32*(-g.mapx*math.log(tan(self.lat)+1/cos(self.lat))/6+g.mapy/2)) - disp_y * 32
+		if self.x0 < -5000:
+			self.x0 += 16384
+		elif self.x0 > 5000:
+			self.x0 -= 16384
+		self.i = self.x0//32
+		self.j = self.y0//32
 
-			i = (x0//32)
-			j = (y0//32)
+	def update(self,maplat,maplon,redraw_list):
+		self.flighttime += 1
 
-			oldCenter = self.rect.center
+		if lat_lon_dist(maplat,maplon,self.lat,self.lon) < 1000:
+			self.update_coords()
 
-			self.image = pygame.transform.rotate(self.baseImage, -(bearing-90))
-			self.rect = self.image.get_rect(center=self.rect.center)
-			tmp.blit(self.image,(x0-self.rect.width/2,y0-self.rect.height/2))
+			a = disp_x + self.i
+			b = disp_y + self.j
+			a = wrap(a,g.mapx)
 
-			rect = pygame.Rect((i-1)*32,(j-1)*32,32*3,32*3)
-			global changed_rects
-			changed_rects.append(rect)
+			for u in [-1,0,1]:
+				for v in [-1,0,1]:
+					chk_tile = [a+u,b+v,self.i+u,self.j+v]
+					if chk_tile not in redraw_list:
+						redraw_list.append(chk_tile)
 
-		# Find central angle and azimuth, use to plot new position
-		azimuth = math.asin(sin(bearing)*cos(self.lat))
-		sigma01 = math.atan2(tan(self.lat),cos(bearing)) 
-		lon0 = self.lon - math.degrees(math.atan2(math.sin(azimuth)*math.sin(sigma01),math.cos(sigma01)))
-		sigma = sigma01 + self.speed/3959
-		self.lat = math.degrees(math.asin(math.cos(azimuth)*math.sin(sigma)))
-		self.lon = math.degrees(math.atan2(math.sin(azimuth)*math.sin(sigma),math.cos(sigma)))+lon0
+			self.visible = 1
+		else:
+			self.visible = 0
+
+		# Plot new position
+		sigma = self.sigma01 + self.flighttime * self.speed/3959
+		self.lat = math.degrees(math.asin(math.cos(self.azimuth)*math.sin(sigma)))
+		self.lon = math.degrees(math.atan2(math.sin(self.azimuth)*math.sin(sigma),math.cos(sigma)))+self.lon0
 		self.dist += self.speed
+
+	def display(self,changed_rects):
+		tmp = pygame.display.get_surface()
+		self.update_coords()
+
+		oldCenter = self.rect.center
+
+		self.image = pygame.transform.rotate(self.baseImage, -(self.course()-90))
+		self.rect = self.image.get_rect(center=self.rect.center)
+		tmp.blit(self.image,(self.x0-self.rect.width/2,self.y0-self.rect.height/2))
+
+		rect = pygame.Rect((self.i-1)*32,(self.j-1)*32,32*3,32*3)
+		changed_rects.append(rect)
 
 	def dist_left(self):
 		return lat_lon_dist(self.lat,self.lon,self.dlat,self.dlon)
@@ -230,16 +221,12 @@ class Plane(pygame.sprite.Sprite):
 	def course(self):
 		return math.degrees(math.atan2(sin(self.dlon-self.lon),(cos(self.lat)*tan(self.dlat)-sin(self.lat)*cos(self.dlon-self.lon))))
 
-	def initGroup(self):
-		planes.add(self)
-
-def redraw_tile9(x,y,i,j):
-	for a in [-1,0,1]:
-		for b in [-1,0,1]:
-			drawTile(x+a,y+b,i+a,j+b)
-			for town in visibletowns:
-				if town.X == x+a and town.Y == y+b:
-					drawTown(town)
+def redraw_tile(params):
+	x,y,i,j = params
+	drawTile(x,y,i,j)
+	for town in visibletowns:
+		if town.X == x and town.Y == y:
+			town.draw()
 
 def sphere_plot(lat,lon):
 	for i in range(4):
@@ -248,33 +235,42 @@ def sphere_plot(lat,lon):
 			doty = int(192/2 - 192/2*sin(lat)) + i*192
 			pygame.draw.circle(DOTSURF, (255,0,0), (dotx, doty), 3)
 
-def drawTown(town):
-	x0,y0 = ((town.X-disp_x)*32,(town.Y-disp_y)*32)
-	if x0 > 2000:
-		x0 -= 16384
-	if x0 < -2000:
-		x0 += 16384
-	radius = math.ceil(town.population / 250000) + 3
-	if town.population > 1000000:
-		radius = math.ceil(town.population / 1000000) + 7
-	if radius > 12:
-		radius = 12
-	if town.isCapital:
-		pygame.draw.circle(DISPLAYSURF, colors[town.country + 1], (x0+12, y0+12), radius)
-		pygame.draw.circle(DISPLAYSURF, (0,0,0), (x0+12, y0+12), radius,2)
-		DISPLAYSURF.blit(textures["CAPITAL"],(x0, y0))
-	else:
-		if town.population > 1000000:
-			pygame.draw.circle(DISPLAYSURF, colors[town.country + 1], (x0+12, y0+12), radius)
+class Town:
+	def __init__(self,lat,lon):
+		self.lat, self.lon = (lat,lon)
+		self.X, self.Y = inv_lat_long((lat,lon))
+		self.X = wrap(self.X, g.mapx)
+		self.country = -1
+		self.selected = 0
+
+	def draw(self):
+		x0,y0 = ((self.X-disp_x)*32,(self.Y-disp_y)*32)
+		if x0 > 2000:
+			x0 -= 16384
+		if x0 < -2000:
+			x0 += 16384
+		DISPLAYSURF = pygame.display.get_surface()
+		radius = math.ceil(self.population / 250000) + 3
+		if self.population > 1000000:
+			radius = math.ceil(self.population / 1000000) + 7
+		if radius > 12:
+			radius = 12
+		if self.isCapital:
+			pygame.draw.circle(DISPLAYSURF, colors[self.country + 1], (x0+12, y0+12), radius)
 			pygame.draw.circle(DISPLAYSURF, (0,0,0), (x0+12, y0+12), radius,2)
-			DISPLAYSURF.blit(textures["CITY"],(x0, y0))
+			DISPLAYSURF.blit(textures["CAPITAL"],(x0, y0))
 		else:
-			pygame.draw.circle(DISPLAYSURF, colors[town.country + 1], (x0+16, y0+14), radius)
-			pygame.draw.circle(DISPLAYSURF, (0,0,0), (x0+16, y0+14), radius,2)
-			DISPLAYSURF.blit(textures["TOWN"],(x0+4, y0+8))
-			
-	if town.selected:
-		pygame.draw.rect(DISPLAYSURF, (255,0,0), (x0,y0,32,32), 2)
+			if self.population > 1000000:
+				pygame.draw.circle(DISPLAYSURF, colors[self.country + 1], (x0+12, y0+12), radius)
+				pygame.draw.circle(DISPLAYSURF, (0,0,0), (x0+12, y0+12), radius,2)
+				DISPLAYSURF.blit(textures["CITY"],(x0, y0))
+			else:
+				pygame.draw.circle(DISPLAYSURF, colors[self.country + 1], (x0+16, y0+14), radius)
+				pygame.draw.circle(DISPLAYSURF, (0,0,0), (x0+16, y0+14), radius,2)
+				DISPLAYSURF.blit(textures["TOWN"],(x0+4, y0+8))
+				
+		if self.selected:
+			pygame.draw.rect(DISPLAYSURF, (255,0,0), (x0,y0,32,32), 2)
 
 def drawTile(x,y,i,j):
 	x = wrap(x,g.mapx)
@@ -357,13 +353,11 @@ def load_textures():
 
 def launch_game():
 	import random
-	global DISPLAYSURF
 	global DOTSURF
+	global PLANESURF
 	global disp_x
 	global disp_y
 	global colors
-	global planes
-	global changed_rects
 	global visibletowns
 	pygame.init()
 	DISPLAYSURF = pygame.display.set_mode((1024, 768), 0, 32)
@@ -409,7 +403,7 @@ def launch_game():
 	timepunch("Setup done!\nEntering main gfx loop at: ")
 	frame = 0
 	while True: # main game loop
-		changed_rects = []
+		changed_rects.clear()
 		for event in pygame.event.get():
 			if event.type == QUIT:
 				pygame.quit()
@@ -519,12 +513,18 @@ def launch_game():
 			for town in g.towns:
 				if lat_lon_dist(lat,lon,town.lat,town.lon) < 1000:
 					k += 1
-					drawTown(town)
+					town.draw()
 					visibletowns.append(town)
 
-		planes.update(lat,lon)
+		redraw_list = []
+		planes.update(lat,lon,redraw_list)
+
+		for tile in redraw_list:
+			redraw_tile(tile)
 
 		for plane in planes.sprites():
+			if plane.visible:
+				plane.display(changed_rects)
 			if plane.dist_left() < plane.speed:
 				changed_rects.append(plane.rect)
 				plane.kill()
@@ -553,11 +553,11 @@ def launch_game():
 			pygame.display.update(changed_rects)
 		viewchange = 0
 		frame += 1
-		if frame % 5 == 0:
-			town1, town2 = random.sample(bigtowns, 2)	
+		if frame % 30000 == 0:
+			town1, town2 = random.sample(g.towns, 2)	
 			planes.add(Plane(town1.lat,town1.lon,town2.lat,town2.lon))
 		if frame > 3600:
 			frame -= 3600
 		fpsClock.tick(FPS)
-		if frame % 10 == 0:
+		if frame % 10000 == 0:
 			print(fpsClock.get_fps(),len(planes))
