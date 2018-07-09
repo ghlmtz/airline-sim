@@ -8,7 +8,8 @@ from gfx import launch_game
 import ginit as g
 
 ########## TODO ##########
-
+# Move plane sprites to dedicated surface
+# Instead of redrawing all tiles on camera move, have intelligent drawing method
 
 ######### MAIN BODY ##########
 
@@ -23,6 +24,7 @@ def main():
 	timepunch("City step done: ")
 
 	if g.DEBUG:
+		from draw import makeHeatMap, makeWetMap
 		makeHeatMap()
 		makeWetMap()
 		imageOutput(biomepixels,"mapbiome.png")

@@ -41,11 +41,54 @@ class DialogBox(pygame.sprite.Sprite):
 				x_pos = 5
 				y_pos += 22
 
-class TownDialog(DialogBox):
+# Scroll up and down in a list
+class ScrollableBox(DialogBox):
+	def __init__(self,width,height,maxHeight,x,y):
+		super().__init__(width,height,x,y)
+		self.height = height
+		self.maxHeight = maxHeight
+		self.scrollSurf = pygame.Surface((width,maxHeight))
+		self.scrollSurf.fill((255, 255, 255))
+		self.y_off = 0
+
+	def scroll(self,amount):
+		# No need to scroll if not enough text
+		if self.maxHeight > self.height:
+			top = self.y_off
+			bottom = self.y_off + self.height
+			self.y_off += amount
+
+			if self.y_off > 0:
+				self.y_off = 0
+			elif -self.y_off + self.height > self.maxHeight:
+				self.y_off = -self.maxHeight + self.height
+
+			self.image.blit(self.scrollSurf, (0, self.y_off))
+
+	def setText(self,text):
+		x_pos = 5
+		y_pos = 5
+		self.y_off = 0
+
+		for t in text:
+			x = self.font.render(t,False,(0,0,0))
+			self.scrollSurf.blit(x,(x_pos,y_pos))
+			y_pos += 22
+
+			if (x_pos > self.scrollSurf.get_width()-5):
+				x_pos = 5
+				y_pos += 22
+
+		self.image.blit(self.scrollSurf, (0, self.y_off))
+		self.maxHeight = y_pos + 22
+		
+class TownDialog(ScrollableBox):
 	def __init__(self,town):
-		super().__init__(300,700,700,30)
+		super().__init__(300,300,1200,700,30)
 		self.visible = 0
-		self.town = town
+		self.town = None
+		if town != None:
+			self.setTown(town)
 
 	def setTown(self,town):
 		if self.town != None:
@@ -53,7 +96,8 @@ class TownDialog(DialogBox):
 		town.selected = 1
 		self.town = town
 		self.visible = 1
-		self.image.fill((255,255,255))
+		#self.image.fill((255,255,255))
+		self.scrollSurf.fill((255, 255, 255))
 		txt = []
 		if town.isCapital:
 			label = "Capital"
@@ -79,6 +123,30 @@ class TownDialog(DialogBox):
 			txt.append("Other towns in country: (%d)"%len(other_towns))
 			[txt.append(t[0]) for t in sorted(other_towns, key=lambda x:x[1])]
 		self.setText(txt)
+
+class CityList(ScrollableBox):
+	def __init__(self):
+		super().__init__(300,300,5000,700,430)
+		self.scrollSurf.fill((255, 255, 255))
+		to_fmt = []
+		for N, stadt in enumerate(g.countries):
+			tmp = [N,len(stadt)]
+			pop = 0
+			a = 0
+			for t in stadt:
+				pop += t.population
+				if t.isCapital:
+					a = 1
+					tmp.append(t.lat)
+					tmp.append(t.lon)
+			if a:
+				tmp.append(pop)
+				to_fmt.append(tmp)
+		txt = []
+		for x in sorted(to_fmt, key=lambda x:x[4]):
+			txt.append("Country %d" % x[0] + " Capital: (%.2f %.2f)" % (x[2],x[3])) 
+			txt.append("Population: {:,}".format(x[4]) + " Cities: %d" % x[1])
+		self.setText(txt)
 	
 class Plane(pygame.sprite.Sprite):
 	def __init__(self,lat,lon,dlat,dlon):
@@ -86,60 +154,66 @@ class Plane(pygame.sprite.Sprite):
 		self.baseImage = pygame.image.load('tiles/plane.png').convert_alpha()
 		self.image = self.baseImage
 		self.rect = self.baseImage.get_rect()
-		self.speed = 5	# In miles/frame, I guess
+		self.speed = 0.2 * 20	# In miles/frame, I guess
 		self.dist = 0
 		self.initGroup()
 		self.lat = lat
 		self.lon = lon
 		self.dlat = dlat
 		self.dlon = dlon
-
-		self.display()
-
-	def update(self):
 		x = round((self.lon/(360)+0.5)*g.mapx*32)
 		y = round(32*(-g.mapx*math.log(tan(self.lat)+1/cos(self.lat))/6+g.mapy/2))
+		self.display(1,x,y)
 
-		x0 = (x - disp_x*32)
-		if x0 < -5000:
-			x0 += 16384
-		elif x0 > 5000:
-			x0 -= 16384
-		y0 = y - disp_y*32
+	def update(self,maplat,maplon):
+		if lat_lon_dist(maplat,maplon,self.lat,self.lon) < 1000:
+			x = round((self.lon/(360)+0.5)*g.mapx*32)
+			y = round(32*(-g.mapx*math.log(tan(self.lat)+1/cos(self.lat))/6+g.mapy/2))
 
-		# Test blit
-		a = disp_x + (x0//32)
-		b = disp_y + (y0//32)
-		a = wrap(a,g.mapx)
-		i = (x0//32)
-		j = (y0//32)
+			x0 = (x - disp_x*32)
+			if x0 < -5000:
+				x0 += 16384
+			elif x0 > 5000:
+				x0 -= 16384
+			y0 = y - disp_y*32
 
-		redraw_tile9(a,b,(x0//32),(y0//32))
+			# Test blit
+			a = disp_x + (x0//32)
+			b = disp_y + (y0//32)
+			a = wrap(a,g.mapx)
+			i = (x0//32)
+			j = (y0//32)
 
-	def display(self):
-		x = round((self.lon/(360)+0.5)*g.mapx*32)
-		y = round(32*(-g.mapx*math.log(tan(self.lat)+1/cos(self.lat))/6+g.mapy/2))
+			redraw_tile9(a,b,(x0//32),(y0//32))
 
-		tmp = pygame.display.get_surface()
-		x0 = (x - disp_x*32)
-		if x0 < -5000:
-			x0 += 16384
-		elif x0 > 5000:
-			x0 -= 16384
-		y0 = y - disp_y*32
+			self.display(1,x,y)
+		else:
+			self.display(0,None,None)
 
-		i = (x0//32)
-		j = (y0//32)
-
-		oldCenter = self.rect.center
+	def display(self,onscreen,x,y):
 		bearing = self.course()
-		self.image = pygame.transform.rotate(self.baseImage, -(bearing-90))
-		self.rect = self.image.get_rect(center=self.rect.center)
-		tmp.blit(self.image,(x0-self.rect.width/2,y0-self.rect.height/2))
 
-		rect = pygame.Rect((i-1)*32,(j-1)*32,32*3,32*3)
-		global changed_rects
-		changed_rects.append(rect)
+		if onscreen:
+			tmp = pygame.display.get_surface()
+			x0 = (x - disp_x*32)
+			if x0 < -5000:
+				x0 += 16384
+			elif x0 > 5000:
+				x0 -= 16384
+			y0 = y - disp_y*32
+
+			i = (x0//32)
+			j = (y0//32)
+
+			oldCenter = self.rect.center
+
+			self.image = pygame.transform.rotate(self.baseImage, -(bearing-90))
+			self.rect = self.image.get_rect(center=self.rect.center)
+			tmp.blit(self.image,(x0-self.rect.width/2,y0-self.rect.height/2))
+
+			rect = pygame.Rect((i-1)*32,(j-1)*32,32*3,32*3)
+			global changed_rects
+			changed_rects.append(rect)
 
 		# Find central angle and azimuth, use to plot new position
 		azimuth = math.asin(sin(bearing)*cos(self.lat))
@@ -172,7 +246,7 @@ def sphere_plot(lat,lon):
 		if cos(lat) * cos(lon+180-90*i) < 0:
 			dotx = int(192/2 - 192/2 * cos(lat) * sin(lon+180-90*i))
 			doty = int(192/2 - 192/2*sin(lat)) + i*192
-			pygame.draw.circle(DISPLAYSURF, (255,0,0), (dotx, doty), 3)
+			pygame.draw.circle(DOTSURF, (255,0,0), (dotx, doty), 3)
 
 def drawTown(town):
 	x0,y0 = ((town.X-disp_x)*32,(town.Y-disp_y)*32)
@@ -282,7 +356,9 @@ def load_textures():
 	}
 
 def launch_game():
+	import random
 	global DISPLAYSURF
+	global DOTSURF
 	global disp_x
 	global disp_y
 	global colors
@@ -291,6 +367,12 @@ def launch_game():
 	global visibletowns
 	pygame.init()
 	DISPLAYSURF = pygame.display.set_mode((1024, 768), 0, 32)
+	SPHERESURF = pygame.Surface((192, 768), 0, 32)
+	DOTSURF = pygame.Surface((192, 768), 0, 32)
+	SPHERESURF.set_colorkey((255,0,255))
+	DOTSURF.set_colorkey((255,0,255))
+	SPHERESURF.fill((255,0,255))
+	DOTSURF.fill((255,0,255))
 	fpsClock = pygame.time.Clock()
 	FPS = 60
 	disp_x = 100
@@ -306,18 +388,23 @@ def launch_game():
 	for i in range(4):
 		f_obj = get_tar_fileobj("mapsphere%d.png"%(i+1))
 		spheres.append(pygame.image.load(f_obj,'a.png').convert_alpha())
-		DISPLAYSURF.blit(spheres[i],(0,i*192))
+		SPHERESURF.blit(spheres[i],(0,i*192))
 
 	viewchange = 1
 	buttondown = False
 	towndialog = TownDialog(None)
 
+	cdialog = CityList()
+
 	colors = [((N*73) % 192,(N*179)%192,(N*37)%192) for N in range(len(g.countries)+10)]
 	colors[0] = (255,255,255)
 
 	changed_rects = []
-	tile_calc = 0
-	tile_queue = [g.tiles[disp_x][disp_y]]
+	bigtowns = []
+	for town in g.towns:
+		if town.population > 6000000:
+			bigtowns.append(town)
+	print(len(bigtowns))
 
 	timepunch("Setup done!\nEntering main gfx loop at: ")
 	frame = 0
@@ -327,19 +414,33 @@ def launch_game():
 			if event.type == QUIT:
 				pygame.quit()
 				sys.exit()
-			elif event.type == MOUSEBUTTONDOWN and event.button == 1:
-				buttondown = True
-			elif event.type == MOUSEBUTTONDOWN and event.button == 2:
-				x0,y0 = (disp_x+(event.pos[0]//32),disp_y+(event.pos[1]//32))
-				x0 = wrap(x0,g.mapx)
-				a,b = lat_long((x0,y0))
-				for town in g.towns:
-					if town.selected:
-						planes.add(Plane(town.lat,town.lon,a,b))
-						break
+			elif event.type == MOUSEBUTTONDOWN:
+				if event.button == 4: # Mouse wheel up
+					if towndialog:
+						towndialog.scroll(20)
+					cdialog.scroll(20)
+					changed_rects.append(cdialog.rect)
+				if event.button == 5: # Mouse wheel down
+					if towndialog:
+						towndialog.scroll(-20)
+					cdialog.scroll(-20)
+					changed_rects.append(cdialog.rect)
+				if event.button == 1: # Left button, store click
+					buttondown = True
+				if event.button == 2: # Middle button
+					# Spawns a plane for now
+					x0,y0 = (disp_x+(event.pos[0]//32),disp_y+(event.pos[1]//32))
+					x0 = wrap(x0,g.mapx)
+					a,b = lat_long((x0,y0))
+					for town in g.towns:
+						if town.selected:
+							planes.add(Plane(town.lat,town.lon,a,b))
+							break
 			elif event.type == MOUSEBUTTONUP and event.button == 1 and buttondown:
+				# We clicked on something
 				buttondown = False
 				if event.pos[0] < 192 and event.pos[1] < 192*4:
+					# Clicked on a sphere. Move to associated location
 					sphere_click = event.pos[1]//192
 					x0 = event.pos[0] - 192/2
 					y0 = 192/2 - (event.pos[1] % 192)
@@ -361,15 +462,18 @@ def launch_game():
 							viewchange = 1
 				if not viewchange:
 					if towndialog.visible and towndialog.rect.collidepoint(event.pos):
+						# Close town dialog if clicked on
 						for town in g.towns:
 							town.selected = 0
 						towndialog.visible = 0
 						viewchange = 1
 					else:
+						# Check if we clicked on a town
 						x0,y0 = (disp_x+(event.pos[0]//32),disp_y+(event.pos[1]//32))
 						x0 = wrap(x0,g.mapx)
 						for town in visibletowns:
 							if town.X == x0 and town.Y == y0:
+								# For now, spawn a plane from the town and open dialog
 								disp_x = x0 - 16
 								disp_y = y0 - 12
 								disp_x = wrap(disp_x,g.mapx)
@@ -378,15 +482,18 @@ def launch_game():
 								viewchange = 1
 								break
 						else:
+							# If we didn't click on a town, print some debug info on the tile for now
 							print(lat_long((x0,y0)),g.tiles[x0][y0].heightType, g.tiles[x0][y0].biomeType, g.tiles[x0][y0].isLand)
 
 		keys_pressed = pygame.key.get_pressed()
 
 		if keys_pressed[K_LEFT]:
 			disp_x -= 1
+			disp_x = wrap(disp_x,g.mapx)
 			viewchange = 1
 		if keys_pressed[K_RIGHT]:
 			disp_x -= -1
+			disp_x = wrap(disp_x,g.mapx)
 			viewchange = 1
 		if keys_pressed[K_UP] and disp_y > 96:
 			disp_y -= 1
@@ -395,15 +502,18 @@ def launch_game():
 			disp_y -= -1
 			viewchange = 1
 
+		lat,lon = lat_long((wrap(disp_x+20,g.mapx),disp_y+12))
+
 		if viewchange:
+			# Draw the whole screen again
+			# Change this in the future???
 			for i in range(32):
 				for j in range(24):
 					x = disp_x + i
 					y = disp_y + j
-					disp_x = wrap(disp_x,g.mapx)
+
 					drawTile(x,y,i,j)
 
-			lat,lon = lat_long((wrap(disp_x+20,g.mapx),disp_y+12))
 			visibletowns = []
 			k = 0
 			for town in g.towns:
@@ -412,26 +522,42 @@ def launch_game():
 					drawTown(town)
 					visibletowns.append(town)
 
-		planes.update()
+		planes.update(lat,lon)
+
 		for plane in planes.sprites():
-			plane.display()
 			if plane.dist_left() < plane.speed:
-				print(plane.dist)
+				changed_rects.append(plane.rect)
 				plane.kill()
+
 		if towndialog.visible:
 			towndialog.group.draw(DISPLAYSURF)
 			if not viewchange:
 				changed_rects.append(towndialog.rect)
-		for i in range(4):
-			DISPLAYSURF.blit(spheres[i],(0,i*192))
-		sphere_plot(lat,lon)
-		for plane in planes.sprites():
-			sphere_plot(plane.lat,plane.lon)
-		if not viewchange:
+
+		cdialog.group.draw(DISPLAYSURF)
+
+		DISPLAYSURF.blit(SPHERESURF,(0,0))
+
+		if viewchange or frame % 60 == 0:
+			DOTSURF.fill((255,0,255))
+			sphere_plot(lat,lon)
+			for plane in planes.sprites():
+				sphere_plot(plane.lat,plane.lon)
+
+		DISPLAYSURF.blit(DOTSURF,(0,0))
+		if not(viewchange) or frame % 60 == 0:
 			changed_rects.append(pygame.Rect(0,0,192,192*4))
 		if viewchange:
 			pygame.display.update()
 		else:
 			pygame.display.update(changed_rects)
 		viewchange = 0
+		frame += 1
+		if frame % 5 == 0:
+			town1, town2 = random.sample(bigtowns, 2)	
+			planes.add(Plane(town1.lat,town1.lon,town2.lat,town2.lon))
+		if frame > 3600:
+			frame -= 3600
 		fpsClock.tick(FPS)
+		if frame % 10 == 0:
+			print(fpsClock.get_fps(),len(planes))
