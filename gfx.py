@@ -283,12 +283,18 @@ def drawTile(x,y,i,j):
 		exit()
 	if biome == BiomeType.ICE:
 		tmp.blit(textures[biome],(i*32,j*32))
-	elif not g.tiles[x][y].isLand:
-		tmp.blit(textures[g.tiles[x][y].heightType.name],(i*32,j*32))
 	elif stadt_mode:
 		cell = pygame.Surface((32,32))
-		cell.fill(colors[g.tiles[x][y].country+1])
+		if not g.tiles[x][y].isLand:
+			cell.fill((14,76,105))
+		else:
+			try:
+				cell.fill(colors[g.tiles[x][y].country+1])
+			except TypeError:
+				print(x,y,g.tiles[x][y])
 		tmp.blit(cell,(i*32,j*32))
+	elif not g.tiles[x][y].isLand:
+		tmp.blit(textures[g.tiles[x][y].heightType.name],(i*32,j*32))
 	elif g.tiles[x][y].heightType in [HType.FOREST,HType.GRASS] and biome == BiomeType.RAINFOREST:
 		tmp.blit(textures[BiomeType.WOODLAND],(i*32,j*32))
 	elif g.tiles[x][y].heightType == HType.GRASS and biome == BiomeType.SAVANNA:
@@ -397,7 +403,7 @@ def launch_game():
 	cdialog = CityList()
 
 	colors = [((N*73) % 192,(N*179)%192,(N*37)%192) for N in range(len(g.countries)+10)]
-	colors[0] = (255,255,255)
+	colors[0] = (0,0,0)
 
 	changed_rects = []
 	bigtowns = []
@@ -487,7 +493,7 @@ def launch_game():
 								break
 						else:
 							# If we didn't click on a town, print some debug info on the tile for now
-							print(lat_long((x0,y0)),g.tiles[x0][y0].heightType, g.tiles[x0][y0].biomeType, g.tiles[x0][y0].isLand)
+							print(lat_long((x0,y0)),g.tiles[x0][y0].heightType, g.tiles[x0][y0].biomeType, g.tiles[x0][y0].country)
 
 		keys_pressed = pygame.key.get_pressed()
 

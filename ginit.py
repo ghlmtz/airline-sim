@@ -8,11 +8,10 @@ mapy = 512
 #	1238	What I've been working with, for the most part
 #	374539	Sparse continents
 #	99999
-seed = 42069
+seed = 773202
 sea_level = 0.6
 
 DEBUG = 0
-EXPERIMENT = 1
 GFXDEBUG = 0
 
 setup_time = timeit.default_timer()

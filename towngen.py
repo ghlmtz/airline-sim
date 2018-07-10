@@ -14,6 +14,40 @@ def dist_calc(N,town,other_town):
 		return N
 	return -1
 
+def _countryFF(tile,country,stack):
+	if tile.country is not None:
+		return
+	if not(tile.isLand):
+		return
+	tile.country = country
+	from mapgen import getTop, getBottom, getLeft, getRight
+	t = getTop(tile)
+	if t.country is None and t.isLand:
+		stack.append((t,country,))
+	t = getBottom(tile)
+	if t.country is None and t.isLand:
+		stack.append((t,country,))
+	t = getLeft(tile)
+	if t.country is None and t.isLand:
+		stack.append((t,country,))
+	t = getRight(tile)
+	if t.country is None and t.isLand:
+		stack.append((t,country,))
+
+def countryFF(tuplestack):
+	i = 0
+	tuplestack.append(None)
+	while len(tuplestack) > 0 and i < 100000:
+		i += 1
+		top = tuplestack.pop(0)
+		if top is None:
+			if len(tuplestack) == 0:
+				return
+			random.shuffle(tuplestack)
+			top = tuplestack.pop(0)
+			tuplestack.append(None)
+		_countryFF(top[0],top[1],tuplestack)
+
 def loadTowns():
 	if g.have_savefile:
 		f = get_tar_data('towns.dat')
@@ -31,6 +65,14 @@ def loadTowns():
 			g.lands[T.land].towns.append((T.X,T.Y))
 			g.towns.append(T)
 			g.town_grid[T.X][T.Y] = T
+
+		f = get_tar_data('tileland.dat')
+		json_str = f.decode('utf-8')
+		json_tileland = json.loads(json_str)
+		for tileinfo in json_tileland:
+			X = tileinfo["X"]
+			Y = tileinfo["Y"]
+			g.tiles[X][Y].country = tileinfo["c"]
 		if g.DEBUG:
 			print("Towns: %d" %len(g.towns))
 	else:
@@ -210,9 +252,42 @@ def loadTowns():
 					capital.isCapital = False
 				maxtown.isCapital = True
 
+		# Assign countries to all the tiles now that we have towns
+		for land in g.lands:
+			if len(land.towns) == 0:
+				x,y = land.tiles[0]
+				countryFF([(g.tiles[x][y],-1)])
+			else:
+				t = land.towns[0]
+				c = g.town_grid[t.X][t.Y].country
+				brk = 0
+				for town in land.towns:
+					if c != g.town_grid[town.X][town.Y].country:
+						tuplestack = [(g.tiles[t.X][t.Y],g.town_grid[t.X][t.Y].country) for t in land.towns]
+						countryFF(tuplestack)
+						break
+				else: 
+					x,y = land.tiles[0]
+					countryFF([(g.tiles[x][y],c)])
+					continue
+
 		json_town = [{"N": len(g.countries)}]
 		json_town.extend([vars(x) for x in g.towns])
-		#with open("seeds/%dcity.dat"%g.seed,"w") as f:
 		json_str = json.dumps(json_town)
 		json_bytes = json_str.encode('utf-8')
 		add_to_tarfile((json_bytes,"towns.dat"))
+
+		json_tileland = []
+		for land in g.lands:
+			for t in land.tiles:
+				X,Y = t
+				if g.tiles[X][Y].country:
+					d = {}
+					d["X"] = X
+					d["Y"] = Y
+					d["c"] = g.tiles[X][Y].country
+					b = [d]
+					json_tileland.extend(b)
+		json_str = json.dumps(json_tileland)
+		json_bytes = json_str.encode('utf-8')
+		add_to_tarfile((json_bytes,"tileland.dat"))
