@@ -285,6 +285,10 @@ def drawTile(x,y,i,j):
 		tmp.blit(textures[biome],(i*32,j*32))
 	elif not g.tiles[x][y].isLand:
 		tmp.blit(textures[g.tiles[x][y].heightType.name],(i*32,j*32))
+	elif stadt_mode:
+		cell = pygame.Surface((32,32))
+		cell.fill(colors[g.tiles[x][y].country+1])
+		tmp.blit(cell,(i*32,j*32))
 	elif g.tiles[x][y].heightType in [HType.FOREST,HType.GRASS] and biome == BiomeType.RAINFOREST:
 		tmp.blit(textures[BiomeType.WOODLAND],(i*32,j*32))
 	elif g.tiles[x][y].heightType == HType.GRASS and biome == BiomeType.SAVANNA:
@@ -352,13 +356,13 @@ def load_textures():
 	}
 
 def launch_game():
-	import random
 	global DOTSURF
 	global PLANESURF
 	global disp_x
 	global disp_y
 	global colors
 	global visibletowns
+	global stadt_mode
 	pygame.init()
 	DISPLAYSURF = pygame.display.set_mode((1024, 768), 0, 32)
 	SPHERESURF = pygame.Surface((192, 768), 0, 32)
@@ -374,6 +378,8 @@ def launch_game():
 	pygame.display.set_caption('Flyin\' High')
 
 	planes = pygame.sprite.Group()
+
+	stadt_mode = 0
 
 	load_textures()
 
@@ -408,6 +414,10 @@ def launch_game():
 			if event.type == QUIT:
 				pygame.quit()
 				sys.exit()
+			elif event.type == KEYDOWN:
+				if event.key == K_c:
+					stadt_mode = 1 - stadt_mode
+					viewchange = 1
 			elif event.type == MOUSEBUTTONDOWN:
 				if event.button == 4: # Mouse wheel up
 					if towndialog:
@@ -534,7 +544,7 @@ def launch_game():
 			if not viewchange:
 				changed_rects.append(towndialog.rect)
 
-		cdialog.group.draw(DISPLAYSURF)
+		#cdialog.group.draw(DISPLAYSURF)
 
 		DISPLAYSURF.blit(SPHERESURF,(0,0))
 
@@ -553,11 +563,13 @@ def launch_game():
 			pygame.display.update(changed_rects)
 		viewchange = 0
 		frame += 1
-		if frame % 30000 == 0:
-			town1, town2 = random.sample(g.towns, 2)	
-			planes.add(Plane(town1.lat,town1.lon,town2.lat,town2.lon))
 		if frame > 3600:
 			frame -= 3600
 		fpsClock.tick(FPS)
-		if frame % 10000 == 0:
-			print(fpsClock.get_fps(),len(planes))
+		if g.GFXDEBUG:
+			import random
+			if frame % 30000 == 0:
+				town1, town2 = random.sample(g.towns, 2)	
+				planes.add(Plane(town1.lat,town1.lon,town2.lat,town2.lon))
+			if frame % 10000 == 0:
+				print(fpsClock.get_fps(),len(planes))
