@@ -11,6 +11,7 @@ class DialogBox(pygame.sprite.Sprite):
 		self.initFont()
 		self.initImage(width,height,x,y)
 		self.initGroup()
+		self.visible = 0
 
 	def initFont(self):
 		pygame.font.init()
@@ -27,6 +28,14 @@ class DialogBox(pygame.sprite.Sprite):
 	def initGroup(self):
 		self.group = pygame.sprite.GroupSingle()
 		self.group.add(self)
+
+	# Define this for subclass if dynamic dialog
+	def update(self):
+		pass
+
+	# Extend this if we want to do more stuff
+	def hide(self):
+		self.visible = 0
 		
 	def setText(self,text):
 		x_pos = 5
@@ -85,7 +94,6 @@ class ScrollableBox(DialogBox):
 class TownDialog(ScrollableBox):
 	def __init__(self,town):
 		super().__init__(300,300,1200,700,30)
-		self.visible = 0
 		self.town = None
 		if town != None:
 			self.setTown(town)
@@ -96,7 +104,6 @@ class TownDialog(ScrollableBox):
 		town.selected = 1
 		self.town = town
 		self.visible = 1
-		#self.image.fill((255,255,255))
 		self.scrollSurf.fill((255, 255, 255))
 		txt = []
 		if town.isCapital:
@@ -124,6 +131,12 @@ class TownDialog(ScrollableBox):
 			[txt.append(t[0]) for t in sorted(other_towns, key=lambda x:x[1])]
 		self.setText(txt)
 
+	def hide(self):
+		self.town.selected = 0
+		self.town = None
+		super().hide()
+
+
 class CityList(ScrollableBox):
 	def __init__(self):
 		super().__init__(300,300,5000,700,430)
@@ -147,20 +160,23 @@ class CityList(ScrollableBox):
 			txt.append("Country %d" % x[0] + " Capital: (%.2f %.2f)" % (x[2],x[3])) 
 			txt.append("Population: {:,}".format(x[4]) + " Cities: %d" % x[1])
 		self.setText(txt)
-	
+		self.visible = 1
+
 class Plane(pygame.sprite.Sprite):
-	def __init__(self,lat,lon,dlat,dlon):
+	def __init__(self,src,dest):
 		pygame.sprite.Sprite.__init__(self)
 		self.baseImage = pygame.image.load('tiles/plane.png').convert_alpha()
 		self.image = self.baseImage
 		self.rect = self.baseImage.get_rect()
 		self.speed = 0.2	# In miles/frame, I guess
 		self.dist = 0
-		self.lat = lat
-		self.lon = lon
+		self.lat = src.lat
+		self.lon = src.lon
+		self.src = src
 		self.flighttime = 0
-		self.dlat = dlat
-		self.dlon = dlon
+		self.dlat = dest.lat
+		self.dlon = dest.lon
+		self.dest = dest
 		bearing = self.course()
 		self.azimuth = math.asin(sin(bearing)*cos(self.lat))
 		self.sigma01 = math.atan2(tan(self.lat),cos(bearing)) 
@@ -212,8 +228,8 @@ class Plane(pygame.sprite.Sprite):
 		self.rect = self.image.get_rect(center=self.rect.center)
 		tmp.blit(self.image,(self.x0-self.rect.width/2,self.y0-self.rect.height/2))
 
-		rect = pygame.Rect((self.i-1)*32,(self.j-1)*32,32*3,32*3)
-		changed_rects.append(rect)
+		self.drawn_rect = pygame.Rect((self.i-1)*32,(self.j-1)*32,32*3,32*3)
+		changed_rects.append(self.drawn_rect)
 
 	def dist_left(self):
 		return lat_lon_dist(self.lat,self.lon,self.dlat,self.dlon)
@@ -361,6 +377,11 @@ def load_textures():
 		"NONE"      : pygame.image.load('tiles/notfound.png')
 	}
 
+def fmt_clock(t):
+	m = t % 60
+	h = t // 60
+	return ("%02d%02dZ" % (h, m))
+
 def launch_game():
 	global DOTSURF
 	global PLANESURF
@@ -399,18 +420,20 @@ def launch_game():
 	viewchange = 1
 	buttondown = False
 	towndialog = TownDialog(None)
-
 	cdialog = CityList()
 
 	colors = [((N*73) % 192,(N*179)%192,(N*37)%192) for N in range(len(g.countries)+10)]
 	colors[0] = (0,0,0)
 
 	changed_rects = []
-	bigtowns = []
-	for town in g.towns:
-		if town.population > 6000000:
-			bigtowns.append(town)
-	print(len(bigtowns))
+
+	# In-game clock setup
+	time_minutes = 9*60
+
+	# Set up refresh event
+	pygame.time.set_timer(USEREVENT + 1, 1000)
+
+	dialogs = [towndialog, cdialog]
 
 	timepunch("Setup done!\nEntering main gfx loop at: ")
 	frame = 0
@@ -420,9 +443,21 @@ def launch_game():
 			if event.type == QUIT:
 				pygame.quit()
 				sys.exit()
+			elif event.type == USEREVENT:
+				time_minutes += 1
+				time_minutes = time_minutes % (60*24)
+				print(fmt_clock(time_minutes))
+			elif event.type == USEREVENT + 1:
+				# Refresh dynamic windows, if any
+				for d in dialogs:
+					if d.visible:
+						d.update()
 			elif event.type == KEYDOWN:
 				if event.key == K_c:
 					stadt_mode = 1 - stadt_mode
+					viewchange = 1
+				elif event.key == K_n:
+					cdialog.visible = 1 - cdialog.visible
 					viewchange = 1
 			elif event.type == MOUSEBUTTONDOWN:
 				if event.button == 4: # Mouse wheel up
@@ -430,22 +465,15 @@ def launch_game():
 						towndialog.scroll(20)
 					cdialog.scroll(20)
 					changed_rects.append(cdialog.rect)
-				if event.button == 5: # Mouse wheel down
+				elif event.button == 5: # Mouse wheel down
 					if towndialog:
 						towndialog.scroll(-20)
 					cdialog.scroll(-20)
 					changed_rects.append(cdialog.rect)
-				if event.button == 1: # Left button, store click
+				elif event.button == 1: # Left button, store click
 					buttondown = True
-				if event.button == 2: # Middle button
-					# Spawns a plane for now
-					x0,y0 = (disp_x+(event.pos[0]//32),disp_y+(event.pos[1]//32))
-					x0 = wrap(x0,g.mapx)
-					a,b = lat_long((x0,y0))
-					for town in g.towns:
-						if town.selected:
-							planes.add(Plane(town.lat,town.lon,a,b))
-							break
+				elif event.button == 2: # Middle button
+					pass
 			elif event.type == MOUSEBUTTONUP and event.button == 1 and buttondown:
 				# We clicked on something
 				buttondown = False
@@ -471,29 +499,35 @@ def launch_game():
 							disp_y = y1 - 12
 							viewchange = 1
 				if not viewchange:
-					if towndialog.visible and towndialog.rect.collidepoint(event.pos):
-						# Close town dialog if clicked on
-						for town in g.towns:
-							town.selected = 0
-						towndialog.visible = 0
-						viewchange = 1
+					# Clicked on dialog box?
+					for d in dialogs:
+						if d.visible and d.rect.collidepoint(event.pos):
+							d.hide()
+							print("hiding",type(d),d.visible)
+							viewchange = 1
+							break
 					else:
-						# Check if we clicked on a town
-						x0,y0 = (disp_x+(event.pos[0]//32),disp_y+(event.pos[1]//32))
-						x0 = wrap(x0,g.mapx)
-						for town in visibletowns:
-							if town.X == x0 and town.Y == y0:
-								# For now, spawn a plane from the town and open dialog
-								disp_x = x0 - 16
-								disp_y = y0 - 12
-								disp_x = wrap(disp_x,g.mapx)
-								towndialog.setTown(town)
-								planes.add(Plane(town.lat,town.lon,0,0))
-								viewchange = 1
+						# TODO: Clicked on plane?
+						for p in planes:
+							if p.rect.collidepoint(event.pos):
 								break
 						else:
-							# If we didn't click on a town, print some debug info on the tile for now
-							print(lat_long((x0,y0)),g.tiles[x0][y0].heightType, g.tiles[x0][y0].biomeType, g.tiles[x0][y0].country)
+							# Clicked on town?
+							x0,y0 = (disp_x+(event.pos[0]//32),disp_y+(event.pos[1]//32))
+							x0 = wrap(x0,g.mapx)
+							for town in visibletowns:
+								if town.X == x0 and town.Y == y0:
+									# For now, spawn a plane from the town and open dialog
+									disp_x = x0 - 16
+									disp_y = y0 - 12
+									disp_x = wrap(disp_x,g.mapx)
+									towndialog.setTown(town)
+									planes.add(Plane(town,g.towns[0]))
+									viewchange = 1
+									break
+							else:
+								# Clicked on normal tile: print debug info for now
+								print(lat_long((x0,y0)),g.tiles[x0][y0].heightType, g.tiles[x0][y0].biomeType, g.tiles[x0][y0].country)
 
 		keys_pressed = pygame.key.get_pressed()
 
@@ -545,12 +579,11 @@ def launch_game():
 				changed_rects.append(plane.rect)
 				plane.kill()
 
-		if towndialog.visible:
-			towndialog.group.draw(DISPLAYSURF)
-			if not viewchange:
-				changed_rects.append(towndialog.rect)
-
-		#cdialog.group.draw(DISPLAYSURF)
+		for d in dialogs:
+			if d.visible:
+				d.group.draw(DISPLAYSURF)
+				if not viewchange:
+					changed_rects.append(d.rect)
 
 		DISPLAYSURF.blit(SPHERESURF,(0,0))
 
@@ -572,10 +605,13 @@ def launch_game():
 		if frame > 3600:
 			frame -= 3600
 		fpsClock.tick(FPS)
-		if g.GFXDEBUG:
-			import random
-			if frame % 30000 == 0:
-				town1, town2 = random.sample(g.towns, 2)	
-				planes.add(Plane(town1.lat,town1.lon,town2.lat,town2.lon))
-			if frame % 10000 == 0:
-				print(fpsClock.get_fps(),len(planes))
+		if frame % 60 == 0:
+			# Advance in-game clock by 1 minute every 60 frames (temporary)
+			pygame.event.post(pygame.event.Event(USEREVENT))
+		# Randomly spawn in planes every 10 seconds or so
+		import random
+		if frame % 600 == 0:
+			town1, town2 = random.sample(g.towns, 2)	
+			planes.add(Plane(town1,town2))
+		if frame % 1800 == 0:
+			print(fpsClock.get_fps(),len(planes))
