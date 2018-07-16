@@ -10,6 +10,7 @@ import ginit as g
 ########## TODO ##########
 # Move plane sprites to dedicated surface
 # Instead of redrawing all tiles on camera move, have intelligent drawing method
+# Active window border
 
 ######### MAIN BODY ##########
 

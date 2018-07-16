@@ -90,6 +90,26 @@ class ScrollableBox(DialogBox):
 
 		self.image.blit(self.scrollSurf, (0, self.y_off))
 		self.maxHeight = y_pos + 22
+
+	def clear(self):
+		self.scrollSurf.fill((255, 255, 255))
+
+class PlaneList(ScrollableBox):
+	def __init__(self,planes):
+		super().__init__(400,600,1200,200,30)
+		self.planes = planes
+		self.visible = 1
+
+	def update(self):
+		self.clear()
+		txt = []
+		for p in sorted(self.planes,key=lambda x: (x.routedist - x.dist)):
+			m, s = divmod(p.flighttime, 60)
+			h, m = divmod(m, 60)
+			d = p.routedist - p.dist
+			t = fmt_clock(time_minutes+(d/p.speed)//60)
+			txt.append("T: %d:%02d:%02d. %.0f miles left. ETA %s" % (h,m,s,(p.routedist-p.dist),t))
+		self.setText(txt)
 		
 class TownDialog(ScrollableBox):
 	def __init__(self,town):
@@ -136,7 +156,6 @@ class TownDialog(ScrollableBox):
 		self.town = None
 		super().hide()
 
-
 class CityList(ScrollableBox):
 	def __init__(self):
 		super().__init__(300,300,5000,700,430)
@@ -177,6 +196,7 @@ class Plane(pygame.sprite.Sprite):
 		self.dlat = dest.lat
 		self.dlon = dest.lon
 		self.dest = dest
+		self.routedist = lat_lon_dist(self.lat,self.lon,self.dlat,self.dlon)
 		bearing = self.course()
 		self.azimuth = math.asin(sin(bearing)*cos(self.lat))
 		self.sigma01 = math.atan2(tan(self.lat),cos(bearing)) 
@@ -390,6 +410,7 @@ def launch_game():
 	global colors
 	global visibletowns
 	global stadt_mode
+	global time_minutes
 	pygame.init()
 	DISPLAYSURF = pygame.display.set_mode((1024, 768), 0, 32)
 	SPHERESURF = pygame.Surface((192, 768), 0, 32)
@@ -421,6 +442,7 @@ def launch_game():
 	buttondown = False
 	towndialog = TownDialog(None)
 	cdialog = CityList()
+	pdialog = PlaneList(planes)
 
 	colors = [((N*73) % 192,(N*179)%192,(N*37)%192) for N in range(len(g.countries)+10)]
 	colors[0] = (0,0,0)
@@ -433,7 +455,7 @@ def launch_game():
 	# Set up refresh event
 	pygame.time.set_timer(USEREVENT + 1, 1000)
 
-	dialogs = [towndialog, cdialog]
+	dialogs = [towndialog, cdialog, pdialog]
 
 	timepunch("Setup done!\nEntering main gfx loop at: ")
 	frame = 0
@@ -458,6 +480,9 @@ def launch_game():
 					viewchange = 1
 				elif event.key == K_n:
 					cdialog.visible = 1 - cdialog.visible
+					viewchange = 1
+				elif event.key == K_p:
+					pdialog.visible = 1 - pdialog.visible
 					viewchange = 1
 			elif event.type == MOUSEBUTTONDOWN:
 				if event.button == 4: # Mouse wheel up
@@ -608,10 +633,12 @@ def launch_game():
 		if frame % 60 == 0:
 			# Advance in-game clock by 1 minute every 60 frames (temporary)
 			pygame.event.post(pygame.event.Event(USEREVENT))
-		# Randomly spawn in planes every 10 seconds or so
+		# Randomly spawn in planes every 10 seconds or so (temporary)
 		import random
-		if frame % 600 == 0:
-			town1, town2 = random.sample(g.towns, 2)	
+		if frame % random.randint(1,1200) == 0:
+			town1, town2 = random.sample(g.towns, 2)
+			while town_dist(town1,town2) > 7000:
+				town1, town2 = random.sample(g.towns, 2)
 			planes.add(Plane(town1,town2))
-		if frame % 1800 == 0:
+		if frame % 600 == 0:
 			print(fpsClock.get_fps(),len(planes))
