@@ -635,10 +635,10 @@ def launch_game():
 			pygame.event.post(pygame.event.Event(USEREVENT))
 		# Randomly spawn in planes every 10 seconds or so (temporary)
 		import random
-		if frame % random.randint(1,1200) == 0:
+		if frame % random.randint(1,200) == 0:
 			town1, town2 = random.sample(g.towns, 2)
 			while town_dist(town1,town2) > 7000:
 				town1, town2 = random.sample(g.towns, 2)
 			planes.add(Plane(town1,town2))
-		if frame % 600 == 0:
+		if frame % 120 == 0:
 			print(fpsClock.get_fps(),len(planes))

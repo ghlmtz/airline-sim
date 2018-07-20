@@ -19,9 +19,12 @@ class TileGroup:
 		self.area = 0
 
 class Tile:
-	def __init__(self):
+	def __init__(self,x,y):
 		self.floodFilled = False
 		self.country = None
+		self.isLand = True
+		self.X = x
+		self.Y = y
 
 	def updateBitmask(self):
 		self.count = 0
@@ -76,8 +79,6 @@ def setHeightType(t):
 
 	if t.heightType in [HType.DEEPWATER,HType.SHALLOW]:
 		t.isLand = False
-	else:
-		t.isLand = True
 	return ival
 
 def setHeatType(t):
@@ -140,15 +141,12 @@ def setMapDataXY(arandom,hrandom,mrandom,xy,yin=-1):
 		y = yin
 	else:
 		x,y = xy
-	x1 = 0
-	x2 = 1
-	dx = (x2 - x1)
 
 	s = x/g.mapx
 	t = y/g.mapy
 
-	nx = x1 + math.cos(s*2*math.pi) * dx / (2*math.pi)
-	ny = x1 + math.sin(s*2*math.pi) * dx / (2*math.pi)
+	nx = math.cos(s*2*math.pi) / (2*math.pi)
+	ny = math.sin(s*2*math.pi) / (2*math.pi)
 	nz = t/(g.mapx/g.mapy)
 
 	value = heightNoise(nx,ny,nz,arandom)
@@ -178,14 +176,11 @@ def setTile(aval,hval,mval,xy,yin=-1):
 		y = yin
 	else:
 		x,y = xy
-	t = Tile()
-	t.X = x
-	t.Y = y
+	t = Tile(x,y)
 
 	t.heightValue = aval
-	value = aval
 
-	ival = setHeightType(t)
+	setHeightType(t)
 
 	heatval = hval*0.9
 
@@ -196,13 +191,13 @@ def setTile(aval,hval,mval,xy,yin=-1):
 	heatval -= coldness
 
 	if t.heightType == HType.GRASS:
-		heatval -= 0.1 * value
+		heatval -= 0.1 * aval
 	elif t.heightType == HType.FOREST:
-		heatval -= 0.25 * value
+		heatval -= 0.25 * aval
 	elif t.heightType == HType.HILLS:
-		heatval -= 0.4 * value
+		heatval -= 0.4 * aval
 	elif t.heightType == HType.MOUNTAIN:
-		heatval -= 0.75 * value
+		heatval -= 0.75 * aval
 
 	t.heatVal = heatval
 
@@ -225,8 +220,7 @@ def setTile(aval,hval,mval,xy,yin=-1):
 
 	t.biomeType = getBiomeType(t)
 
-	g.tiles[x][y] = t
-	return (t.biomeType,aval,hval)
+	return t
 
 def _floodFill(tile,group,stack):
 	if tile.floodFilled:
@@ -288,17 +282,6 @@ def prepareTilemap():
 	heatFractal = [[0 for _ in range(g.mapy)] for _ in range(g.mapx)]
 	moistureFractal = [[0 for _ in range(g.mapy)] for _ in range(g.mapx)]
 
-	for x in range(g.mapx):
-		for y in range(g.mapy):
-			t = Tile()
-			t.X = x
-			t.Y = y
-			t.isLand = True
-			t.floodFilled = False
-			t.heightType = 0
-			t.biomeType = 0
-			g.tiles[x][y] = t
-
 	tile_list = []
 	for x in range(g.mapx):
 		for y in range(g.mapy):
@@ -326,11 +309,7 @@ def prepareTilemap():
 	for N,tile in enumerate(tiles):
 		x = N//512
 		y = N %512
-		g.tiles[x][y].biomeType = tile[0]
-		g.tiles[x][y].heightValue = tile[1]
-		g.tiles[x][y].heatVal = tile[2]
-		setHeightType(g.tiles[x][y])
-		setHeatType(g.tiles[x][y])
+		g.tiles[x][y] = tile
 	updateNeighbours()
 	timepunch("Tile stuff: ")
 
