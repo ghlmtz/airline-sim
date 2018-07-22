@@ -196,6 +196,7 @@ class Plane(pygame.sprite.Sprite):
 		self.dlat = dest.lat
 		self.dlon = dest.lon
 		self.dest = dest
+		self.visible = 0
 		self.routedist = lat_lon_dist(self.lat,self.lon,self.dlat,self.dlon)
 		bearing = self.course()
 		self.azimuth = math.asin(sin(bearing)*cos(self.lat))
@@ -536,7 +537,13 @@ def launch_game():
 						# TODO: Clicked on plane?
 						for p in planes:
 							if p.visible:
-								if p.rect.collidepoint(event.pos):
+								# Check if click is within 12 px (half the img size)
+								if abs(event.pos[0] - p.x0) + abs(event.pos[1] - p.y0) <= 12:
+									m, s = divmod(p.flighttime, 60)
+									h, m = divmod(m, 60)
+									d = p.routedist - p.dist
+									t = fmt_clock(time_minutes+(d/p.speed)//60)
+									print("T: %d:%02d:%02d. %.0f miles left. ETA %s" % (h,m,s,(p.routedist-p.dist),t))
 									break
 						else:
 							# Clicked on town?
@@ -629,9 +636,9 @@ def launch_game():
 		if frame > 3600:
 			frame -= 3600
 		fpsClock.tick(FPS)
-		#if frame % 60 == 0:
+		if frame % 60 == 0:
 			# Advance in-game clock by 1 minute every 60 frames (temporary)
-		#	pygame.event.post(pygame.event.Event(USEREVENT))
+			pygame.event.post(pygame.event.Event(USEREVENT))
 		# Randomly spawn in planes every 10 seconds or so (temporary)
 		import random
 		if frame % random.randint(1,200) == 0:
@@ -639,5 +646,5 @@ def launch_game():
 			while town_dist(town1,town2) > 7000:
 				town1, town2 = random.sample(g.towns, 2)
 			planes.add(Plane(town1,town2))
-		if frame % 120 == 0:
-			print(fpsClock.get_fps(),len(planes))
+		#if frame % 120 == 0:
+		#	print(fpsClock.get_fps(),len(planes))
