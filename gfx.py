@@ -8,10 +8,17 @@ from util import *
 class DialogBox(pygame.sprite.Sprite):
 	def __init__(self,width,height,x,y):
 		pygame.sprite.Sprite.__init__(self)
+		self.focus = 1
 		self.initFont()
 		self.initImage(width,height,x,y)
 		self.initGroup()
 		self.visible = 0
+
+	def border(self):
+		if self.focus:
+			return (255,0,0)
+		else:
+			return (128,128,128)
 
 	def initFont(self):
 		pygame.font.init()
@@ -21,6 +28,7 @@ class DialogBox(pygame.sprite.Sprite):
 		self.image = pygame.Surface((width,height))
 		self.image.fill((255,255,255))
 		self.rect = self.image.get_rect()
+		pygame.draw.rect(self.image, self.border(), self.rect, 3)
 		self.rect.topleft = (x,y)
 		tmp = pygame.display.get_surface()
 		tmp.blit(self.image,self.rect.topleft)
@@ -54,10 +62,12 @@ class DialogBox(pygame.sprite.Sprite):
 class ScrollableBox(DialogBox):
 	def __init__(self,width,height,maxHeight,x,y):
 		super().__init__(width,height,x,y)
+		self.width = width
 		self.height = height
 		self.maxHeight = maxHeight
 		self.scrollSurf = pygame.Surface((width,maxHeight))
 		self.scrollSurf.fill((255, 255, 255))
+		pygame.draw.rect(self.image, self.border(), Rect(0,0,width,height), 3)
 		self.y_off = 0
 
 	def scroll(self,amount):
@@ -73,6 +83,7 @@ class ScrollableBox(DialogBox):
 				self.y_off = -self.maxHeight + self.height
 
 			self.image.blit(self.scrollSurf, (0, self.y_off))
+			pygame.draw.rect(self.image, self.border(), Rect(0,0,self.width,self.height), 3)
 
 	def setText(self,text):
 		x_pos = 5
@@ -89,6 +100,7 @@ class ScrollableBox(DialogBox):
 				y_pos += 22
 
 		self.image.blit(self.scrollSurf, (0, self.y_off))
+		pygame.draw.rect(self.image, self.border(), Rect(0,0,self.width,self.height), 3)
 		self.maxHeight = y_pos + 22
 
 	def clear(self):
@@ -112,11 +124,9 @@ class PlaneList(ScrollableBox):
 		self.setText(txt)
 		
 class TownDialog(ScrollableBox):
-	def __init__(self,town):
+	def __init__(self):
 		super().__init__(300,300,1200,700,30)
 		self.town = None
-		if town != None:
-			self.setTown(town)
 
 	def setTown(self,town):
 		if self.town != None:
@@ -124,7 +134,8 @@ class TownDialog(ScrollableBox):
 		town.selected = 1
 		self.town = town
 		self.visible = 1
-		self.scrollSurf.fill((255, 255, 255))
+		self.focus = 1
+		self.clear()
 		txt = []
 		if town.isCapital:
 			label = "Capital"
@@ -159,7 +170,6 @@ class TownDialog(ScrollableBox):
 class CityList(ScrollableBox):
 	def __init__(self):
 		super().__init__(300,300,5000,700,430)
-		self.scrollSurf.fill((255, 255, 255))
 		to_fmt = []
 		for N, stadt in enumerate(g.countries):
 			tmp = [N,len(stadt)]
@@ -401,6 +411,10 @@ def fmt_clock(t):
 	h = t // 60
 	return ("%02d%02dZ" % (h, m))
 
+def clear_focus(dialogs):
+	for d in dialogs:
+		d.focus = 0
+
 def launch_game():
 	global DOTSURF
 	global PLANESURF
@@ -442,7 +456,7 @@ def launch_game():
 
 	viewchange = 1
 	buttondown = False
-	towndialog = TownDialog(None)
+	towndialog = TownDialog()
 	cdialog = CityList()
 	pdialog = PlaneList(planes)
 
@@ -481,22 +495,34 @@ def launch_game():
 					stadt_mode = 1 - stadt_mode
 					viewchange = 1
 				elif event.key == K_n:
-					cdialog.visible = 1 - cdialog.visible
+					if cdialog.visible:
+						cdialog.visible = 0
+						cdialog.focus = 0
+					else:
+						clear_focus(dialogs)
+						cdialog.visible = 1
+						cdialog.focus = 1
+						activedialog = cdialog
 					viewchange = 1
 				elif event.key == K_p:
-					pdialog.visible = 1 - pdialog.visible
+					if pdialog.visible:
+						pdialog.visible = 0
+						pdialog.focus = 0
+					else:
+						clear_focus(dialogs)
+						pdialog.visible = 1
+						pdialog.focus = 1
+						activedialog = pdialog
 					viewchange = 1
 			elif event.type == MOUSEBUTTONDOWN:
 				if event.button == 4: # Mouse wheel up
-					if towndialog:
-						towndialog.scroll(20)
-					cdialog.scroll(20)
-					changed_rects.append(cdialog.rect)
+					if activedialog:
+						activedialog.scroll(20)
+						changed_rects.append(activedialog.rect)
 				elif event.button == 5: # Mouse wheel down
-					if towndialog:
-						towndialog.scroll(-20)
-					cdialog.scroll(-20)
-					changed_rects.append(cdialog.rect)
+					if activedialog:
+						activedialog.scroll(-20)
+						changed_rects.append(activedialog.rect)
 				elif event.button == 1: # Left button, store click
 					buttondown = True
 				elif event.button == 2: # Middle button
@@ -534,7 +560,7 @@ def launch_game():
 							viewchange = 1
 							break
 					else:
-						# TODO: Clicked on plane?
+						# Clicked on plane?
 						for p in planes:
 							if p.visible:
 								# Check if click is within 12 px (half the img size)
@@ -556,7 +582,9 @@ def launch_game():
 									disp_x = x0 - 16
 									disp_y = y0 - 12
 									disp_x = wrap(disp_x,g.mapx)
+									clear_focus(dialogs)
 									towndialog.setTown(town)
+									activedialog = towndialog
 									planes.add(Plane(town,g.towns[0]))
 									viewchange = 1
 									break
