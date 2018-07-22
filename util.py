@@ -11,6 +11,19 @@ def cos(theta):
 def tan(theta):
 	return math.tan(theta*math.pi/180)
 
+def lat_long_bound(lat,lon,bound):
+	if lat > bound[0][0] or lat < bound[1][0]:
+		return 0
+	if bound[0][1] > bound[1][1]:
+		# Map edge
+		if lon >= bound[0][1] and lon <= bound[1][1]:
+			return 1
+	else:
+		if lon < bound[0][1] or lon > bound[1][1]:
+			return 0
+
+	return 1
+
 def lat_long(xy):
 	(x,y) = xy
 	ynew = (g.mapy/2-y)/(g.mapy/6) * (g.mapy/g.mapx)

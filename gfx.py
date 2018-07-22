@@ -199,6 +199,8 @@ class Plane(pygame.sprite.Sprite):
 		self.routedist = lat_lon_dist(self.lat,self.lon,self.dlat,self.dlon)
 		bearing = self.course()
 		self.azimuth = math.asin(sin(bearing)*cos(self.lat))
+		self.azcos = math.cos(self.azimuth)
+		self.azsin = math.sin(self.azimuth)
 		self.sigma01 = math.atan2(tan(self.lat),cos(bearing)) 
 		self.lon0 = self.lon - math.degrees(math.atan2(math.sin(self.azimuth)*math.sin(self.sigma01),math.cos(self.sigma01)))
 
@@ -212,10 +214,10 @@ class Plane(pygame.sprite.Sprite):
 		self.i = self.x0//32
 		self.j = self.y0//32
 
-	def update(self,maplat,maplon,redraw_list):
+	def update(self,bound,redraw_list):
 		self.flighttime += 1
 
-		if lat_lon_dist(maplat,maplon,self.lat,self.lon) < 1000:
+		if lat_long_bound(self.lat,self.lon,bound):
 			self.update_coords()
 
 			a = disp_x + self.i
@@ -234,8 +236,8 @@ class Plane(pygame.sprite.Sprite):
 
 		# Plot new position
 		sigma = self.sigma01 + self.flighttime * self.speed/3959
-		self.lat = math.degrees(math.asin(math.cos(self.azimuth)*math.sin(sigma)))
-		self.lon = math.degrees(math.atan2(math.sin(self.azimuth)*math.sin(sigma),math.cos(sigma)))+self.lon0
+		self.lat = math.degrees(math.asin(self.azcos*math.sin(sigma)))
+		self.lon = math.degrees(math.atan2(self.azsin*math.sin(sigma),math.cos(sigma)))+self.lon0
 		self.dist += self.speed
 
 	def display(self,changed_rects):
@@ -423,6 +425,9 @@ def launch_game():
 	FPS = 60
 	disp_x = 100
 	disp_y = 200
+	
+	ll_bound = [lat_long((wrap(disp_x-1,g.mapx),disp_y-1)),lat_long((wrap(disp_x+33,g.mapx),disp_y+25))]
+
 	pygame.display.set_caption('Flyin\' High')
 
 	planes = pygame.sprite.Group()
@@ -571,8 +576,6 @@ def launch_game():
 			disp_y -= -1
 			viewchange = 1
 
-		lat,lon = lat_long((wrap(disp_x+20,g.mapx),disp_y+12))
-
 		if viewchange:
 			# Draw the whole screen again
 			# Change this in the future???
@@ -583,16 +586,19 @@ def launch_game():
 
 					drawTile(x,y,i,j)
 
+			# Update lat lon bounding box
+			ll_bound = [lat_long((wrap(disp_x-1,g.mapx),disp_y-1)),lat_long((wrap(disp_x+33,g.mapx),disp_y+25))]
+
 			visibletowns = []
 			k = 0
 			for town in g.towns:
-				if lat_lon_dist(lat,lon,town.lat,town.lon) < 1000:
+				if lat_long_bound(town.lat,town.lon,ll_bound):
 					k += 1
 					town.draw()
 					visibletowns.append(town)
 
 		redraw_list = []
-		planes.update(lat,lon,redraw_list)
+		planes.update(ll_bound,redraw_list)
 
 		for tile in redraw_list:
 			redraw_tile(tile)
@@ -614,6 +620,7 @@ def launch_game():
 
 		if viewchange or frame % 60 == 0:
 			DOTSURF.fill((255,0,255))
+			lat,lon = lat_long((wrap(disp_x+20,g.mapx),disp_y+12))
 			sphere_plot(lat,lon)
 			for plane in planes.sprites():
 				sphere_plot(plane.lat,plane.lon)
@@ -630,9 +637,9 @@ def launch_game():
 		if frame > 3600:
 			frame -= 3600
 		fpsClock.tick(FPS)
-		if frame % 60 == 0:
+		#if frame % 60 == 0:
 			# Advance in-game clock by 1 minute every 60 frames (temporary)
-			pygame.event.post(pygame.event.Event(USEREVENT))
+		#	pygame.event.post(pygame.event.Event(USEREVENT))
 		# Randomly spawn in planes every 10 seconds or so (temporary)
 		import random
 		if frame % random.randint(1,200) == 0:

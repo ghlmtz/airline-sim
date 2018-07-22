@@ -1,9 +1,9 @@
 import random
+from fileio import *
 from util import timepunch
-from draw import drawSphere
 from mapgen import prepareTilemap
 from towngen import loadTowns
-from fileio import *
+from draw import drawSphere
 from gfx import launch_game
 import ginit as g
 
