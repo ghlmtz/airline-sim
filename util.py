@@ -56,3 +56,7 @@ def wrap(n,mod):
 def timepunch(msg):
 	print(msg,timeit.default_timer() - g.setup_time)
 
+def fmt_time(t):
+	m = t % 60
+	h = t // 60
+	return ("%02d%02dZ" % (h, m))

@@ -1,12 +1,18 @@
 import json
 import random
 from multiprocessing import Pool
-from gfx import Town
-
 from util import *
 from enums import *
 from fileio import *
 import ginit as g
+
+class Town:
+	def __init__(self,lat,lon):
+		self.lat, self.lon = (lat,lon)
+		self.X, self.Y = inv_lat_long((lat,lon))
+		self.X = wrap(self.X, g.mapx)
+		self.country = -1
+		self.selected = 0
 
 def dist_calc(N,town,other_town):
 	dist = town_dist(town,other_town)

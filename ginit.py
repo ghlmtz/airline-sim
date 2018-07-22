@@ -21,3 +21,18 @@ lands = []
 towns = []
 countries = []
 have_savefile = False
+
+class Clock():
+	def __init__(self,t):
+		self.time_minutes = t  
+
+	def inc(self,t):
+		self.time_minutes += t
+		self.time_minutes = self.time_minutes % (60*24)
+
+	def fmt_time(self):
+		m = self.time_minutes % 60
+		h = self.time_minutes // 60
+		return ("%02d%02dZ" % (h, m))
+
+clock = Clock(9*60) # 9 AM
