@@ -262,9 +262,6 @@ class Plane(pygame.sprite.Sprite):
 def redraw_tile(params):
 	x,y,i,j = params
 	drawTile(x,y,i,j)
-	for town in visibletowns:
-		if town.X == x and town.Y == y:
-			town.draw()
 
 def sphere_plot(lat,lon):
 	for i in range(4):
@@ -314,11 +311,7 @@ def drawTile(x,y,i,j):
 	x = wrap(x,g.mapx)
 	y = wrap(y,g.mapy)
 	tmp = pygame.display.get_surface()
-	try:
-		biome = g.tiles[x][y].biomeType
-	except IndexError:
-		print("ERROR!",x,y,disp_x,disp_y)
-		exit()
+	biome = g.tiles[x][y].biomeType
 	if biome == BiomeType.ICE:
 		tmp.blit(textures[biome],(i*32,j*32))
 	elif stadt_mode:
@@ -367,6 +360,9 @@ def drawTile(x,y,i,j):
 		tmp.blit(textures[biome],(i*32,j*32))
 	else:
 		tmp.blit(textures["NONE"],(i*32,j*32))
+
+	if g.tiles[x][y].town is not None:
+		g.tiles[x][y].town.draw()
 
 def load_textures():
 	global textures
@@ -539,13 +535,15 @@ def launch_game():
 					else:
 						# TODO: Clicked on plane?
 						for p in planes:
-							if p.rect.collidepoint(event.pos):
-								break
+							if p.visible:
+								if p.rect.collidepoint(event.pos):
+									break
 						else:
 							# Clicked on town?
 							x0,y0 = (disp_x+(event.pos[0]//32),disp_y+(event.pos[1]//32))
 							x0 = wrap(x0,g.mapx)
-							for town in visibletowns:
+							if g.tiles[x0][y0].town is not None:
+								town = g.tiles[x0][y0].town
 								if town.X == x0 and town.Y == y0:
 									# For now, spawn a plane from the town and open dialog
 									disp_x = x0 - 16
@@ -589,14 +587,6 @@ def launch_game():
 			# Update lat lon bounding box
 			ll_bound = [lat_long((wrap(disp_x-1,g.mapx),disp_y-1)),lat_long((wrap(disp_x+33,g.mapx),disp_y+25))]
 
-			visibletowns = []
-			k = 0
-			for town in g.towns:
-				if lat_long_bound(town.lat,town.lon,ll_bound):
-					k += 1
-					town.draw()
-					visibletowns.append(town)
-
 		redraw_list = []
 		planes.update(ll_bound,redraw_list)
 
@@ -606,9 +596,9 @@ def launch_game():
 		for plane in planes.sprites():
 			if plane.visible:
 				plane.display(changed_rects)
-			if plane.dist_left() < plane.speed:
-				changed_rects.append(plane.rect)
-				plane.kill()
+				if plane.dist_left() < plane.speed:
+					changed_rects.append(plane.rect)
+					plane.kill()
 
 		for d in dialogs:
 			if d.visible:
@@ -616,6 +606,7 @@ def launch_game():
 				if not viewchange:
 					changed_rects.append(d.rect)
 
+		# Plot on spheres
 		DISPLAYSURF.blit(SPHERESURF,(0,0))
 
 		if viewchange or frame % 60 == 0:
@@ -632,6 +623,7 @@ def launch_game():
 			pygame.display.update()
 		else:
 			pygame.display.update(changed_rects)
+
 		viewchange = 0
 		frame += 1
 		if frame > 3600:

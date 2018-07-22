@@ -17,7 +17,6 @@ GFXDEBUG = 0
 setup_time = timeit.default_timer()
 
 tiles = [[None] * mapx for _ in range(mapy)]
-town_grid = [[None] * mapx for _ in range(mapy)]
 lands = []
 towns = []
 countries = []

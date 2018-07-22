@@ -64,7 +64,7 @@ def loadTowns():
 			g.countries[T.country].append(T)
 			g.lands[T.land].towns.append((T.X,T.Y))
 			g.towns.append(T)
-			g.town_grid[T.X][T.Y] = T
+			g.tiles[T.X][T.Y].town = T
 
 		f = get_tar_data('tileland.dat')
 		json_str = f.decode('utf-8')
@@ -235,8 +235,8 @@ def loadTowns():
 			town.population = int(pop)
 			popsum += int(pop)
 
-			# Take this opportunity to populate town_grid as well
-			g.town_grid[x][y] = town
+			# Take this opportunity to populate town in tile as well
+			g.tiles[x][y].town = town
 
 		for N,country in enumerate(g.countries):
 			capital = None
@@ -259,11 +259,11 @@ def loadTowns():
 				countryFF([(g.tiles[x][y],-1)])
 			else:
 				t = land.towns[0]
-				c = g.town_grid[t.X][t.Y].country
+				c = g.tiles[t.X][t.Y].town.country
 				brk = 0
 				for town in land.towns:
-					if c != g.town_grid[town.X][town.Y].country:
-						tuplestack = [(g.tiles[t.X][t.Y],g.town_grid[t.X][t.Y].country) for t in land.towns]
+					if c != g.tiles[town.X][town.Y].town.country:
+						tuplestack = [(g.tiles[t.X][t.Y],g.tiles[t.X][t.Y].town.country) for t in land.towns]
 						countryFF(tuplestack)
 						break
 				else: 

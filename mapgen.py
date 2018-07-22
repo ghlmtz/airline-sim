@@ -25,6 +25,7 @@ class Tile:
 		self.isLand = True
 		self.X = x
 		self.Y = y
+		self.town = None
 
 	def updateBitmask(self):
 		self.count = 0
